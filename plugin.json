@@ -5,6 +5,6 @@
     "provider": "Botble\\EditLock\\Providers\\EditLockServiceProvider",
     "author": "Botble Technologies",
     "url": "https://botble.com",
-    "version": "0.1",
+    "version": "1.0.0",
     "description": "Pages and posts will be locked for edit when one of the editors has the page in edit mode."
 }
