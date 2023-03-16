@@ -5,9 +5,11 @@ namespace Botble\EditLock\Supports;
 use Botble\Base\Models\BaseModel;
 use Botble\Support\Services\Cache\Cache;
 use Carbon\Carbon;
+use Illuminate\Auth\AuthManager;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use MetaBox;
+use ReflectionProperty;
 
 class EditLock
 {
@@ -16,6 +18,10 @@ class EditLock
     protected bool $useCache = true;
 
     protected int $interval;
+
+    protected ?BaseModel $user;
+
+    protected bool $userLoaded = false;
 
     public function __construct()
     {
@@ -63,13 +69,13 @@ class EditLock
         return false;
     }
 
-    public function updateMetaData(BaseModel $model, ?array $meta): array
+    public function updateMetaData(BaseModel $model, ?array $metadata): array
     {
-        $user = Auth::user();
+        $user = $this->user();
         $isSaveMeta = false;
-        if ($meta) {
-            if (Arr::get($meta, 'user.id') != $user->getKey()) {
-                $meta = array_merge($meta, [
+        if ($metadata) {
+            if ($this->isNotUser($metadata, $user)) {
+                $metadata = array_merge($metadata, [
                     'user' => $this->getUserData($user),
                 ]);
 
@@ -77,24 +83,24 @@ class EditLock
             }
         } else {
             $isSaveMeta = true;
-            $meta = [
+            $metadata = [
                 'user' => $this->getUserData($user),
             ];
         }
 
-        $meta['time'] = Carbon::now();
+        $metadata['time'] = Carbon::now();
 
-        $this->setCacheValue($this->cacheKey($model), $meta);
+        $this->setCacheValue($this->cacheKey($model), $metadata);
 
         if ($isSaveMeta) {
-            MetaBox::saveMetaBoxData($model, 'edit_lock', $meta);
+            MetaBox::saveMetaBoxData($model, 'edit_lock', $metadata);
         } else {
             if (request()->wantsJson() && class_exists('Debugbar')) {
                 \Debugbar::disable();
             }
         }
 
-        return $meta;
+        return $metadata;
     }
 
     public function deleteMetaData(BaseModel $model): self
@@ -105,10 +111,15 @@ class EditLock
         return $this;
     }
 
-    public function getUserData(BaseModel $user): array
+    public function getUserData(?BaseModel $user): array
     {
+        if (! $user) {
+            return [];
+        }
+
         return [
             'id' => $user->getKey(),
+            'type' => get_class($user),
             'name' => $user->name,
             'avatar' => $user->avatar_url,
         ];
@@ -158,5 +169,34 @@ class EditLock
     public function isSupportedModule(string $model): bool
     {
         return in_array($model, $this->supportedModules());
+    }
+
+    public function user(): ?BaseModel
+    {
+        if (! $this->userLoaded) {
+            $this->userLoaded = true;
+            $authManager = app(AuthManager::class);
+            $guardProperty = new ReflectionProperty($authManager, 'guards');
+            $guardProperty->setAccessible(true);
+            $guards = $guardProperty->getValue($authManager);
+
+            if (is_array($guards) && count($guards)) {
+                $guard = Arr::first(array_keys($guards));
+                $user = Auth::guard($guard)->check() ? Auth::guard($guard)->user() : null;
+                if ($user instanceof BaseModel) {
+                    $this->user = $user;
+                }
+            }
+        }
+
+        return $this->user;
+    }
+
+    public function isNotUser(array $metadata, ?BaseModel $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+        return get_class($user) != Arr::get($metadata, 'user.type') || $user->getKey() != Arr::get($metadata, 'user.id');
     }
 }

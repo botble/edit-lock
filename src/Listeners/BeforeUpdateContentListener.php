@@ -6,7 +6,6 @@ use Botble\Base\Events\BeforeUpdateContentEvent;
 use Botble\Base\Http\Responses\BaseHttpResponse;
 use EditLock;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Auth;
 
 class BeforeUpdateContentListener
 {
@@ -14,11 +13,11 @@ class BeforeUpdateContentListener
     {
         $model = $event->data;
 
-        if (is_in_admin(true) && is_object($model) && EditLock::isSupportedModule(get_class($model))) {
-            $user = Auth::user();
+        if (is_object($model) && EditLock::isSupportedModule(get_class($model))) {
+            $user = EditLock::user();
 
-            if ($metadata = EditLock::getMetaData($model)) {
-                if (Arr::get($metadata, 'user.id') != $user->getKey()) {
+            if ($user && ($metadata = EditLock::getMetaData($model))) {
+                if (EditLock::isNotUser($metadata, $user)) {
                     $response = (new BaseHttpResponse())
                         ->withInput()
                         ->setError(true)

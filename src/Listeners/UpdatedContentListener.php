@@ -11,7 +11,7 @@ class UpdatedContentListener
     {
         $model = $event->data;
 
-        if (is_in_admin(true) && is_object($model) && EditLock::isSupportedModule(get_class($model))) {
+        if (is_object($model) && EditLock::isSupportedModule(get_class($model))) {
             EditLock::deleteMetaData($model);
         }
     }
