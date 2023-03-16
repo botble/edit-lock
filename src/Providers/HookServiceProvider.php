@@ -27,36 +27,36 @@ class HookServiceProvider extends ServiceProvider
     public function updateColumnsTable(EloquentDataTable|CollectionDataTable $data, Model|string|null $model): EloquentDataTable|CollectionDataTable
     {
         if (is_object($model) && EditLock::isSupportedModule(get_class($model))) {
-            $user = EditLock::user();
-            if ($user) {
-                $property = new ReflectionProperty($data, 'columnDef');
-                $property->setAccessible(true);
-                $columnDef = $property->getValue($data);
+            if (! in_array($data->request->input('action'), ['print', 'csv', 'excel', 'pdf'])) {
+                $user = EditLock::user();
+                if ($user) {
+                    $property = new ReflectionProperty($data, 'columnDef');
+                    $property->setAccessible(true);
+                    $columnDef = $property->getValue($data);
+    
+                    $data
+                        ->editColumn('checkbox', function ($item) use ($columnDef, $user) {
+                            if (($metadata = EditLock::getMetaData($item)) && EditLock::isNotUser($metadata, $user)) {
+                                return Html::tag('i', '', ['class' => 'fa fa-lock']);
+                            }
+                            $checkbox = Arr::last($columnDef['edit'], fn ($value) => $value['name'] == 'checkbox');
 
-                $data
-                    ->editColumn('checkbox', function ($item) use ($columnDef, $user) {
-                        if (($metadata = EditLock::getMetaData($item)) && EditLock::isNotUser($metadata, $user)) {
-                            return Html::tag('i', '', ['class' => 'fa fa-lock']);
-                        }
-                        $checkbox = Arr::last($columnDef['edit'], fn ($value) => $value['name'] == 'checkbox');
+                            return Helper::compileContent($checkbox['content'], $checkbox, $item);
+                        })
+                        ->editColumn('name', function ($item) use ($columnDef, $user) {
+                            $name = Arr::last($columnDef['edit'], fn ($value) => $value['name'] == 'name');
 
-                        return Helper::compileContent($checkbox['content'], $checkbox, $item);
-                    })
-                    ->editColumn('name', function ($item) use ($columnDef, $user) {
-                        $name = Arr::last($columnDef['edit'], fn ($value) => $value['name'] == 'name');
+                            $content = '';
+                            if (($metadata = EditLock::getMetaData($item)) && EditLock::isNotUser($metadata, $user)) {
+                                $image = Html::tag('img', '', ['src' => Arr::get($metadata, 'user.avatar'), 'width' => 18, 'class' => 'me-1 rounded']);
+                                $userName = Html::tag('span', trans('plugins/edit-lock::edit-lock.user_is_currently_editing', ['name' => Arr::get($metadata, 'user.name')]));
+                                $content = Html::tag('div', $image . $userName, ['class' => 'small text-muted']);
+                            }
 
-                        $content = '';
-                        if (($metadata = EditLock::getMetaData($item)) && EditLock::isNotUser($metadata, $user)) {
-                            $image = Html::tag('img', '', ['src' => Arr::get($metadata, 'user.avatar'), 'width' => 18, 'class' => 'me-1 rounded']);
-                            $userName = Html::tag('span', trans('plugins/edit-lock::edit-lock.user_is_currently_editing', ['name' => Arr::get($metadata, 'user.name')]));
-                            $content = Html::tag('div', $image . $userName, ['class' => 'small text-muted']);
-                        }
-
-                        return $content . Helper::compileContent($name['content'], $name, $item);
-                    });
+                            return $content . Helper::compileContent($name['content'], $name, $item);
+                        });
+                }
             }
-            
-        
         }
 
         return $data;
