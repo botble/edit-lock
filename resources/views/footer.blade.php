@@ -15,7 +15,7 @@
                     if (Route::has($routeName)) {
                         $route = route($routeName);
                     } else {
-                        $route = route('dashboard.index');
+                        $route = is_in_admin(true) ? route('dashboard.index') : route('public.index');
                     }
                 @endphp
                 <a href="{{ $route }}" class="btn btn-primary">{{ trans('plugins/edit-lock::edit-lock.exit_editor') }}</a>
